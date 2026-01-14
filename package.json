@@ -1,0 +1,23 @@
+{
+  "name": "privy-hl",
+  "version": "0.1.0",
+  "description": "PoC for Privy + Hyperliquid integration",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts",
+    "dev": "bun --watch run index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@nktkas/hyperliquid": "^0.30.2",
+    "@privy-io/node": "^0.7.0",
+    "viem": "^2.44.2"
+  }
+}
