@@ -18,6 +18,7 @@
   "dependencies": {
     "@nktkas/hyperliquid": "^0.30.2",
     "@privy-io/node": "^0.7.0",
+    "envalid": "^8.1.1",
     "viem": "^2.44.2"
   }
 }

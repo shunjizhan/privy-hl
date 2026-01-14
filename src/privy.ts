@@ -8,8 +8,8 @@ let privyClient: PrivyClient | null = null;
 export const getPrivyClient = () => {
   if (!privyClient) {
     privyClient = new PrivyClient({
-      appId: config.privy.appId,
-      appSecret: config.privy.appSecret,
+      appId: config.PRIVY_APP_ID,
+      appSecret: config.PRIVY_APP_SECRET,
     });
   }
   return privyClient;
@@ -26,9 +26,9 @@ export interface PrivyWallet {
 export const getOrCreateWallet = async (): Promise<PrivyWallet> => {
   const privy = getPrivyClient();
 
-  if (config.privy.walletId) {
-    console.log(`   Using existing wallet: ${config.privy.walletId}`);
-    const wallet = await privy.wallets().get(config.privy.walletId);
+  if (config.PRIVY_WALLET_ID) {
+    console.log(`   Using existing wallet: ${config.PRIVY_WALLET_ID}`);
+    const wallet = await privy.wallets().get(config.PRIVY_WALLET_ID);
     return {
       id: wallet.id,
       address: wallet.address,

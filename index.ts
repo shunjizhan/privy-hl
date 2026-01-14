@@ -12,7 +12,6 @@
  *   bun run index.ts
  */
 
-import { validateConfig, config } from './src/config';
 import { getOrCreateWallet, type PrivyWallet } from './src/privy';
 import {
   getMasterAddress,
@@ -38,12 +37,8 @@ const initialize = () => {
   console.log('  Privy + Hyperliquid PoC');
   console.log('='.repeat(60));
 
-  validateConfig();
-  console.log('\n✅ Environment validated');
-
   const masterAddress = getMasterAddress();
   console.log(`\n📋 Master Account: ${masterAddress}`);
-  console.log(`   Network: ${config.hyperliquid.network}`);
 
   return { masterAddress };
 };

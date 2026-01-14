@@ -2,8 +2,10 @@ import { HttpTransport, InfoClient, ExchangeClient } from '@nktkas/hyperliquid';
 import { formatPrice, formatSize, SymbolConverter } from '@nktkas/hyperliquid/utils';
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { getHyperliquidConfig, config } from '../config';
+import { config } from '../config';
 import { createPrivyViemAccount, type PrivyWallet } from '../privy';
+
+const transport = new HttpTransport();
 
 // Symbol converter for proper formatting
 let symbolConverter: Awaited<ReturnType<typeof SymbolConverter.create>> | null = null;
@@ -14,10 +16,6 @@ const getSymbolConverter = async () => {
   }
   return symbolConverter;
 };
-
-const hlConfig = getHyperliquidConfig();
-const isTestnet = hlConfig.hyperliquidChain === 'Testnet';
-const transport = new HttpTransport({ isTestnet });
 
 /**
  * Info client for read-only operations (prices, account state, etc.)
@@ -35,7 +33,7 @@ export const getMidPrices = async (): Promise<Record<string, string>> => {
  * Get the master account address from private key
  */
 export const getMasterAddress = (): `0x${string}` => {
-  const account = privateKeyToAccount(config.hyperliquid.masterPrivateKey);
+  const account = privateKeyToAccount(config.HL_MASTER_PRIVATE_KEY as `0x${string}`);
   return account.address;
 };
 
@@ -43,54 +41,34 @@ export const getMasterAddress = (): `0x${string}` => {
  * Create an exchange client for the master account (using private key)
  */
 export const createMasterExchangeClient = () => {
-  const masterAccount = privateKeyToAccount(config.hyperliquid.masterPrivateKey);
-
-  return new ExchangeClient({
-    transport,
-    wallet: masterAccount,
-    isTestnet,
-  });
+  const masterAccount = privateKeyToAccount(config.HL_MASTER_PRIVATE_KEY as `0x${string}`);
+  return new ExchangeClient({ transport, wallet: masterAccount });
 };
 
 /**
  * Register a Privy wallet as an agent for the master account
- * Uses the master's private key to approve the agent
  */
 export const registerAgent = async (
   agentAddress: `0x${string}`,
   agentName?: string
 ) => {
   const masterClient = createMasterExchangeClient();
-
-  // Use the SDK's built-in approveAgent method
-  const result = await masterClient.approveAgent({
+  return masterClient.approveAgent({
     agentAddress,
     agentName: agentName || null,
   });
-
-  return result;
 };
 
 /**
  * Create an exchange client using Privy wallet as an agent
- * The wallet must be pre-approved as an agent on Hyperliquid
  */
 export const createAgentExchangeClient = (privyWallet: PrivyWallet) => {
-  // Create viem-compatible account from Privy wallet
   const agentAccount = createPrivyViemAccount(privyWallet);
-
-  // Create exchange client with the Privy account
-  const client = new ExchangeClient({
-    transport,
-    wallet: agentAccount,
-    isTestnet,
-  });
-
-  return client;
+  return new ExchangeClient({ transport, wallet: agentAccount });
 };
 
 /**
- * Helper to create exchange client and place a market order
+ * Create trading client with market order helper
  */
 export const createTradingClient = (privyWallet: PrivyWallet) => {
   const client = createAgentExchangeClient(privyWallet);
@@ -98,18 +76,14 @@ export const createTradingClient = (privyWallet: PrivyWallet) => {
   return {
     client,
 
-    /**
-     * Place a market order (using IOC limit with aggressive price)
-     */
     placeMarketOrder: async (params: {
       asset: number;
       isBuy: boolean;
-      sizeUsd: number; // Size in USD
+      sizeUsd: number;
     }) => {
       const mids = await getMidPrices();
       const converter = await getSymbolConverter();
 
-      // Map asset index to symbol
       const assetMap: Record<number, string> = {
         0: 'BTC',
         1: 'ETH',
@@ -130,19 +104,15 @@ export const createTradingClient = (privyWallet: PrivyWallet) => {
         throw new Error(`Could not get mid price for ${symbol}`);
       }
 
-      // Get size decimals from converter
-      const szDecimals = converter.getSzDecimals(symbol);
-
-      // Calculate size based on USD amount
+      const szDecimals = converter.getSzDecimals(symbol) ?? 5;
       const sizeInAsset = params.sizeUsd / midPrice;
 
-      // Set aggressive price for IOC execution (1% slippage)
+      // 1% slippage for IOC execution
       const slippage = 0.01;
       const execPrice = params.isBuy
         ? midPrice * (1 + slippage)
         : midPrice * (1 - slippage);
 
-      // Use SDK formatting utilities for proper tick size compliance
       const formattedPrice = formatPrice(execPrice.toString(), szDecimals);
       const formattedSize = formatSize(sizeInAsset.toString(), szDecimals);
 
@@ -154,33 +124,28 @@ export const createTradingClient = (privyWallet: PrivyWallet) => {
       console.log(`   Mid Price: $${midPrice.toFixed(2)}`);
       console.log(`   Exec Price: $${formattedPrice}`);
 
-      const result = await client.order({
+      return client.order({
         orders: [
           {
             a: params.asset,
             b: params.isBuy,
             p: formattedPrice,
             s: formattedSize,
-            r: false, // Not reduce-only
-            t: { limit: { tif: 'Ioc' } }, // Immediate or Cancel
+            r: false,
+            t: { limit: { tif: 'Ioc' } },
           },
         ],
         grouping: 'na',
       });
-
-      return result;
     },
 
-    /**
-     * Place a limit order
-     */
     placeLimitOrder: async (params: {
       asset: number;
       isBuy: boolean;
       price: string;
       size: string;
     }) => {
-      const result = await client.order({
+      return client.order({
         orders: [
           {
             a: params.asset,
@@ -188,13 +153,11 @@ export const createTradingClient = (privyWallet: PrivyWallet) => {
             p: params.price,
             s: params.size,
             r: false,
-            t: { limit: { tif: 'Gtc' } }, // Good till cancelled
+            t: { limit: { tif: 'Gtc' } },
           },
         ],
         grouping: 'na',
       });
-
-      return result;
     },
   };
 };
