@@ -174,5 +174,6 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 
-# Local wallet mapping (PoC only)
+# Sensitive config files (contains private keys)
 .wallet-mapping.json
+.operator-config.json
