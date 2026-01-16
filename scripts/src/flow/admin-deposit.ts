@@ -39,11 +39,24 @@ export const adminDeposit = async (config: AdminConfig) => {
     return;
   }
 
-  if (ethBalance < BigInt(0.0001 * 1e18)) {
-    console.log('\n  [Warning] Very low ETH balance for gas fees.');
+  // Warn if estimated gas would consume >30% of ETH balance
+  // Typical ERC20 transfer on Arbitrum: ~65k gas at ~0.1 gwei = ~0.000007 ETH
+  // Use conservative estimate: 100k gas at 0.5 gwei = 0.00005 ETH
+  const estimatedGasCost = BigInt(0.00005 * 1e18);
+  const minEthBalance = (estimatedGasCost * 100n) / 30n; // Gas should be <30% of balance
+
+  if (ethBalance > 0n && ethBalance < minEthBalance) {
+    const gasPercent = (estimatedGasCost * 100n) / ethBalance;
+    console.log(`\n  [Warning] Low ETH balance - gas would use ~${gasPercent}% of ETH.`);
     console.log(
       `  Consider sending ETH to ${config.walletAddress} on Arbitrum.`
     );
+  } else if (ethBalance === 0n) {
+    console.log('\n  [Error] No ETH for gas fees.');
+    console.log(
+      `  Send ETH to ${config.walletAddress} on Arbitrum first.`
+    );
+    return;
   }
 
   // Ask for amount

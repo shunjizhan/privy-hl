@@ -9,6 +9,7 @@ import * as readline from 'readline';
 export type OperatorAction =
   | 'create'
   | 'trade'
+  | 'close'
   | 'withdraw'
   | 'deny'
   | 'status'
@@ -27,12 +28,14 @@ export type AdminAction =
 export const OPERATOR_ACTIONS: Record<string, OperatorAction> = {
   '1': 'create',
   '2': 'trade',
-  '3': 'withdraw',
-  '4': 'deny',
-  '5': 'status',
-  '6': 'exit',
+  '3': 'close',
+  '4': 'withdraw',
+  '5': 'deny',
+  '6': 'status',
+  '7': 'exit',
   create: 'create',
   trade: 'trade',
+  close: 'close',
   withdraw: 'withdraw',
   deny: 'deny',
   status: 'status',
@@ -108,6 +111,7 @@ Usage: bun run index.ts [action]
 Operator Actions:
   create    Create a new vault via gateway
   trade     Place a test trade ($11 BTC long)
+  close     Close all positions (market sell)
   withdraw  Test withdrawal to whitelisted address
   deny      Test denied operations (policy enforcement)
   status    Show vault account status
@@ -122,6 +126,7 @@ Examples:
   bun run index.ts              # Interactive menu
   bun run index.ts create       # Create vault
   bun run index.ts trade        # Place test trade
+  bun run index.ts close        # Close all positions
 `);
   }
 };
@@ -133,12 +138,13 @@ export const showOperatorMenu = async (): Promise<OperatorAction> => {
   console.log('\n--- Operator Actions ---');
   console.log('  1. create    Create a new vault');
   console.log('  2. trade     Place test trade ($10 BTC long)');
-  console.log('  3. withdraw  Test withdrawal to whitelisted');
-  console.log('  4. deny      Test denied operations');
-  console.log('  5. status    Show account status');
-  console.log('  6. exit      Exit');
+  console.log('  3. close     Close all positions');
+  console.log('  4. withdraw  Test withdrawal to whitelisted');
+  console.log('  5. deny      Test denied operations');
+  console.log('  6. status    Show account status');
+  console.log('  7. exit      Exit');
 
-  const choice = await prompt('\nEnter choice (1-6 or action name): ');
+  const choice = await prompt('\nEnter choice (1-7 or action name): ');
   const action = OPERATOR_ACTIONS[choice.toLowerCase()];
 
   if (!action) {

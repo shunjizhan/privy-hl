@@ -19,6 +19,7 @@ import {
   privyClient,
   saveBiconomySignerConfig,
   saveAdminOwnerConfig,
+  loadAdminOwnerConfig,
   type BiconomySignerConfig,
   type AdminOwnerConfig,
 } from '../utils';
@@ -55,11 +56,47 @@ export interface CreateVaultResult {
 }
 
 /**
- * Withdrawal typed data schema for Hyperliquid
- * From sig-data.md - HyperliquidSignTransaction uses verifyingContract = 0x0
+ * Typed data schemas for Hyperliquid operations (ALLOWLIST approach)
+ * Only operations with matching schemas will be allowed
+ *
+ * Hyperliquid has two signing mechanisms:
+ * 1. L1 Actions (orders, cancels, leverage, etc.): Use Agent typed data
+ *    - SDK hashes the action and puts it in `connectionId`
+ *    - Each L1 action requires a new Agent signature
+ * 2. User-Signed Actions (withdrawals, transfers): Use HyperliquidTransaction typed data
+ *    - Direct EIP-712 signing with specific action type
  */
+
+// Agent typed data - used for each L1 action (orders, cancels, position updates, etc.)
+// The connectionId field contains the hash of the specific action being authorized
+// Types must match EXACTLY between policy and request, including EIP712Domain
+const AGENT_TYPED_DATA = {
+  types: {
+    EIP712Domain: [
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'chainId', type: 'uint256' },
+      { name: 'verifyingContract', type: 'address' },
+    ],
+    Agent: [
+      { name: 'source', type: 'string' },
+      { name: 'connectionId', type: 'bytes32' },
+    ],
+  },
+  primary_type: 'Agent',
+};
+
+// Withdrawal typed data - User-Signed action for withdrawing to L1
+// Domain: HyperliquidSignTransaction with chainId 42161 (Arbitrum mainnet)
+// Types must match EXACTLY between policy and request, including EIP712Domain
 const WITHDRAW_TYPED_DATA = {
   types: {
+    EIP712Domain: [
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'chainId', type: 'uint256' },
+      { name: 'verifyingContract', type: 'address' },
+    ],
     'HyperliquidTransaction:Withdraw': [
       { name: 'hyperliquidChain', type: 'string' },
       { name: 'destination', type: 'string' },
@@ -71,25 +108,45 @@ const WITHDRAW_TYPED_DATA = {
 };
 
 /**
- * Zero address used by HyperliquidSignTransaction domain (non-trading operations)
- * Exchange (trading) operations use a non-zero verifyingContract
- */
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
-/**
  * Build policy rules for Hyperliquid trading with whitelisted withdrawals
  *
- * Rules are evaluated in order (first match wins):
- * 1. ALLOW withdrawals to whitelisted addresses
- * 2. DENY ALL HyperliquidSignTransaction operations (verifyingContract = 0x0)
- * 3. ALLOW Exchange operations (trading) - has non-zero verifyingContract
- * 4. DENY all other methods
+ * ALLOWLIST APPROACH: Only explicitly allowed operations pass
  *
- * Note: Deposits are NOT allowed for signers - only Admin can deposit
+ * Rules are evaluated in order (first match wins):
+ * 1. ALLOW Agent typed data (L1 actions: orders, cancels, leverage, etc.)
+ * 2. ALLOW withdrawals to whitelisted addresses only (User-Signed actions)
+ * 3. DENY everything else
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const buildPolicyRules = (withdrawWhitelist: string[]): any[] => [
-  // Rule 1: Allow withdrawals ONLY to whitelisted addresses
+const buildPolicyRules = (withdrawWhitelist: string[]): any[] => {
+  // Normalize addresses to lowercase for case-insensitive matching
+  // Hyperliquid sends lowercase addresses in requests
+  const normalizedWhitelist = withdrawWhitelist.map((addr) => addr.toLowerCase());
+
+  return [
+  // ==========================================================================
+  // PRODUCTION POLICY - L1 Actions + Whitelisted Withdrawals
+  // Privy defaults to DENY if no rule matches, so we only need ALLOW rules
+  // ==========================================================================
+
+  // Rule 1: Allow L1 Actions (Agent typed data)
+  // Hyperliquid uses Agent typed data for orders, cancels, leverage, etc.
+  {
+    name: 'Allow L1 Actions (Agent)',
+    method: 'eth_signTypedData_v4',
+    conditions: [
+      {
+        field_source: 'ethereum_typed_data_message',
+        typed_data: AGENT_TYPED_DATA,
+        field: 'source',
+        operator: 'eq',
+        value: 'a', // Hyperliquid mainnet
+      },
+    ],
+    action: 'ALLOW',
+  },
+
+  // Rule 2: Allow Withdrawals to whitelisted addresses only
   {
     name: 'Allow Whitelisted Withdrawals',
     method: 'eth_signTypedData_v4',
@@ -99,56 +156,13 @@ const buildPolicyRules = (withdrawWhitelist: string[]): any[] => [
         typed_data: WITHDRAW_TYPED_DATA,
         field: 'destination',
         operator: 'in',
-        value: withdrawWhitelist,
+        value: normalizedWhitelist,
       },
     ],
     action: 'ALLOW',
-  },
-  // Rule 2: Deny ALL HyperliquidSignTransaction operations (verifyingContract = 0x0)
-  // This catches: non-whitelisted withdrawals, USD sends, spot transfers, etc.
-  {
-    name: 'Deny All HyperliquidSignTransaction',
-    method: 'eth_signTypedData_v4',
-    conditions: [
-      {
-        field_source: 'ethereum_typed_data_domain',
-        field: 'verifyingContract',
-        operator: 'eq',
-        value: ZERO_ADDRESS,
-      },
-    ],
-    action: 'DENY',
-  },
-  // Rule 3: Allow Exchange operations (trading)
-  // Only reaches here if verifyingContract != 0x0 (i.e., Exchange domain)
-  {
-    name: 'Allow Trading Operations',
-    method: 'eth_signTypedData_v4',
-    conditions: [
-      {
-        field_source: 'system',
-        field: 'current_unix_timestamp',
-        operator: 'lt',
-        value: '4102444800', // Always true - only reached for Exchange operations
-      },
-    ],
-    action: 'ALLOW',
-  },
-  // Rule 4: Deny all other operations (deposits, eth_sendTransaction, etc.)
-  {
-    name: 'Deny All Other Operations',
-    method: '*',
-    conditions: [
-      {
-        field_source: 'system',
-        field: 'current_unix_timestamp',
-        operator: 'lt',
-        value: '4102444800', // Always true
-      },
-    ],
-    action: 'DENY',
   },
 ];
+};
 
 /**
  * Create a new vault with admin, operator, and Biconomy signers
@@ -188,12 +202,13 @@ export const createVault = async (withdrawWhitelist: string[]): Promise<CreateVa
   console.log('      Biconomy key quorum registered:', biconomyKeyQuorum.id);
 
   // 3. Create policy
+  const policyRules = buildPolicyRules(withdrawWhitelist);
   const policy = await privyClient.policies().create({
     version: '1.0',
     name: 'Hyperliquid Trading + Whitelisted Withdrawals',
     chain_type: 'ethereum',
     owner_id: adminKeyQuorum.id,
-    rules: buildPolicyRules(withdrawWhitelist),
+    rules: policyRules,
   });
   console.log('[3/6] Policy created:', policy.id);
 
@@ -264,5 +279,73 @@ export const createVault = async (withdrawWhitelist: string[]): Promise<CreateVa
     operatorConfig,
     walletId: wallet.id,
     walletAddress: wallet.address,
+  };
+};
+
+export interface UpdatePolicyResult {
+  policyId: string;
+  rulesUpdated: number;
+  rules: Array<{ id: string; name: string }>;
+}
+
+/**
+ * Update policy rules for an existing vault
+ * Requires admin authorization (owner of the policy)
+ */
+export const updatePolicy = async (walletId: string): Promise<UpdatePolicyResult> => {
+  console.log('='.repeat(60));
+  console.log('Updating policy for wallet:', walletId);
+  console.log('='.repeat(60));
+
+  // 1. Load admin config
+  const adminConfig = loadAdminOwnerConfig(walletId);
+  if (!adminConfig) {
+    throw new Error(`Admin config not found for wallet: ${walletId}`);
+  }
+  console.log('[1/4] Loaded admin config, policy:', adminConfig.policyId);
+
+  // 2. Get current policy
+  const currentPolicy = await privyClient.policies().get(adminConfig.policyId);
+  console.log('[2/4] Current policy has', currentPolicy.rules?.length ?? 0, 'rules');
+
+  // 3. Delete existing rules (need admin authorization)
+  const existingRules = currentPolicy.rules ?? [];
+  for (const rule of existingRules) {
+    console.log(`      Deleting rule: ${rule.id} (${rule.name})`);
+    await privyClient.policies().deleteRule(rule.id, {
+      policy_id: adminConfig.policyId,
+      authorization_context: {
+        authorization_private_keys: [adminConfig.adminPrivateKey],
+      },
+    });
+  }
+  console.log('[3/4] Deleted', existingRules.length, 'existing rules');
+
+  // 4. Create new rules with current logic
+  // For now, use a default whitelist - in production, load from config
+  const withdrawWhitelist = ['0x36CD9238Fd87901661d74c6E7d817DEBbEd034d4'];
+  const newRules = buildPolicyRules(withdrawWhitelist);
+
+  const createdRules: Array<{ id: string; name: string }> = [];
+  for (const rule of newRules) {
+    const created = await privyClient.policies().createRule(adminConfig.policyId, {
+      ...rule,
+      authorization_context: {
+        authorization_private_keys: [adminConfig.adminPrivateKey],
+      },
+    });
+    createdRules.push({ id: created.id, name: created.name });
+    console.log(`      Created rule: ${created.id} (${created.name})`);
+  }
+  console.log('[4/4] Created', createdRules.length, 'new rules');
+
+  console.log('='.repeat(60));
+  console.log('Policy updated successfully!');
+  console.log('='.repeat(60));
+
+  return {
+    policyId: adminConfig.policyId,
+    rulesUpdated: createdRules.length,
+    rules: createdRules,
   };
 };

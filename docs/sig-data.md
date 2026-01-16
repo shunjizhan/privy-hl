@@ -56,3 +56,53 @@ withdraw payload
     }
 }
 ```
+
+L1 action payload
+```
+{
+  "typed_data": {
+    "domain": {
+      "name": "Exchange",
+      "version": "1",
+      "chainId": 1337,
+      "verifyingContract": "0x0000000000000000000000000000000000000000"
+    },
+    "types": {
+      "EIP712Domain": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "version",
+          "type": "string"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "verifyingContract",
+          "type": "address"
+        }
+      ],
+      "Agent": [
+        {
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "name": "connectionId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    "message": {
+      "source": "a",
+      "connectionId": "0x1b5226e2d328a893808e7cfde4a4c651a5a86d20b9f45eaa8a5ff3c561dc3806"
+    },
+    "primary_type": "Agent"
+  }
+}
+}
+```

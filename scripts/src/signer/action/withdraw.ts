@@ -25,17 +25,22 @@ export const testWithdrawal = async (config: OperatorConfig) => {
   console.log(`  Withdrawable: $${withdrawable.toFixed(2)}`);
   console.log(`  Destination: ${WHITELISTED_ADDRESS}`);
 
-  if (withdrawable < 1) {
-    console.log('\n[Skip] Insufficient balance (need at least $1)');
+  // Hyperliquid withdrawal fee is ~$1, need more than that
+  if (withdrawable < 2) {
+    console.log('\n[Skip] Insufficient balance (need > $2 to cover fees)');
     return;
   }
 
   const account = createOperatorAccount(config);
   const client = new ExchangeClient({ transport, wallet: account });
 
+  // Withdraw all available funds
+  const withdrawAmount = Math.floor(withdrawable).toString();
+  console.log(`  Withdrawing: $${withdrawAmount}`);
+
   const result = await client.withdraw3({
     destination: WHITELISTED_ADDRESS,
-    amount: '1',
+    amount: withdrawAmount,
   });
 
   console.log('\n[OK] Withdrawal initiated!');

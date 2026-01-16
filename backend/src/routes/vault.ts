@@ -9,7 +9,7 @@ import axios from 'axios';
 
 import { config } from '../config';
 import { PRIVY_API_BASE, listVaults, loadBiconomySignerConfig } from '../utils';
-import { createVault } from '../services';
+import { createVault, updatePolicy } from '../services';
 import { createVaultSchema, rpcBodySchema, rpcHeadersSchema } from '../schemas';
 
 export const vaultRoutes = new Hono();
@@ -79,6 +79,29 @@ vaultRoutes.get('/:walletId/biconomy-config', (c) => {
 });
 
 /**
+ * Admin endpoint: Update policy rules for a vault
+ * This allows updating policy rules without creating a new wallet
+ */
+vaultRoutes.post('/:walletId/admin/update-policy', async (c) => {
+  const walletId = c.req.param('walletId');
+
+  try {
+    const result = await updatePolicy(walletId);
+    return c.json({
+      success: true,
+      ...result,
+      message: 'Policy updated successfully',
+    });
+  } catch (error) {
+    console.error('Policy update error:', error);
+    return c.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      500
+    );
+  }
+});
+
+/**
  * RPC proxy - forwards pre-signed requests to Privy
  */
 vaultRoutes.post('/:walletId/rpc', async (c) => {
@@ -106,14 +129,10 @@ vaultRoutes.post('/:walletId/rpc', async (c) => {
     return c.json({ error: bodyResult.error.flatten() }, 400);
   }
 
-  const { method } = bodyResult.data;
   const authorizationSignature = headersResult.data['x-privy-authorization-signature'];
-
   const basicAuth = Buffer.from(
     `${config.PRIVY_APP_ID}:${config.PRIVY_APP_SECRET}`
   ).toString('base64');
-
-  console.log(`[Gateway] Forwarding RPC: wallet=${walletId} method=${method}`);
 
   try {
     const response = await axios.post(
@@ -129,7 +148,6 @@ vaultRoutes.post('/:walletId/rpc', async (c) => {
       }
     );
 
-    console.log(`[Gateway] Privy response: ${response.status}`);
     return c.json(response.data, response.status as 200 | 400 | 401 | 403 | 500);
   } catch (error) {
     console.error('[Gateway] Error forwarding to Privy:', error);

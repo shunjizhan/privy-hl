@@ -12,6 +12,7 @@
  * Operator Actions:
  *   create   - Create a new vault via gateway
  *   trade    - Place a test trade ($10 BTC long)
+ *   close    - Close all positions (market sell)
  *   withdraw - Test withdrawal to whitelisted address
  *   deny     - Test denied operations (policy enforcement)
  *   status   - Show vault account status
@@ -34,6 +35,7 @@ import {
   placeTrade,
   testWithdrawal,
   testDeniedOperations,
+  closeAllPositions,
 } from './src/signer';
 
 import {
@@ -95,6 +97,7 @@ const executeOperatorAction = async (action: OperatorAction): Promise<boolean> =
   try {
     if (action === 'status') await showStatus(config.walletAddress);
     if (action === 'trade') await placeTrade(config);
+    if (action === 'close') await closeAllPositions(config);
     if (action === 'withdraw') await testWithdrawal(config);
     if (action === 'deny') await testDeniedOperations(config);
   } catch (error) {

@@ -89,6 +89,14 @@ export const loadBiconomySignerConfig = (walletId: string): BiconomySignerConfig
   return JSON.parse(readFileSync(configPath, 'utf-8'));
 };
 
+export const loadAdminOwnerConfig = (walletId: string): AdminOwnerConfig | null => {
+  const configPath = join(DATA_DIR, `admin-${walletId}.json`);
+  if (!existsSync(configPath)) {
+    return null;
+  }
+  return JSON.parse(readFileSync(configPath, 'utf-8'));
+};
+
 export const listVaults = (): VaultSummary[] => {
   if (!existsSync(DATA_DIR)) {
     return [];

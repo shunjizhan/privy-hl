@@ -25,8 +25,16 @@ import { vaultRoutes } from './routes/vault';
 
 const app = new Hono();
 
+// Custom logger format: ==> for incoming, <== for response
+const customLogger = (message: string, ...rest: string[]) => {
+  const formatted = message
+    .replace(' --> ', ' ==> ')
+    .replace(' <-- ', ' <== ');
+  console.log(formatted, ...rest);
+};
+
 // Middleware
-app.use('*', logger());
+app.use('*', logger(customLogger));
 app.use('*', cors());
 
 // Routes

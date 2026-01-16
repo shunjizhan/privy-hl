@@ -684,6 +684,10 @@ await hlClient.order({ orders: [...], grouping: 'na' });
 }
 ```
 
+**Important limitation:** All Hyperliquid L1 actions (the "Exchange" request types like order/cancel/modify as well as sub-account and vault operations) are signed using the same EIP-712 `Agent` typed data (`domain.name = "Exchange"`). The actual action is only embedded in the `connectionId` hash, so policies cannot distinguish which L1 action is being requested. In practice, allowing the `Agent` typed data allows *all* L1 actions.
+
+**Clarification:** Allowing L1 actions does *not* allow transfers to arbitrary external wallets. Cross-user transfers (e.g., `usdSend`, `spotSend`, `sendAsset`) are **user-signed** actions with `HyperliquidTransaction:*` typed data and are not permitted unless explicitly allowed. L1 actions can still move funds between internal entities (main account ↔ sub-account, wallet ↔ vault).
+
 ---
 
 ## Security Analysis
