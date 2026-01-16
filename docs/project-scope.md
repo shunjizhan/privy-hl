@@ -11,7 +11,7 @@ Both of the parties can only control the vault under permissions, for example, o
 
 Each of the party should be able to execute under permission at anytime, which means there shouldn't be 2-2 quorum or similar stuff.
 
-Both party should/can have exactly the same permissions. Both should at least be able to withdraw to whitelisted addresses and trade.
+Both parties are policy-constrained (permissions can differ per vault). Both should at least be able to withdraw to whitelisted addresses and trade.
 
 Non of the party can have sudo permission (such as updating policy or remove the other party etc). They can only do things under their permissions.
 
@@ -37,7 +37,9 @@ After the vault is created, the operator should be able to trade or withdraw to 
 - Policies restrict wallet actions (the things the wallet signs/executes). They do NOT restrict Privy API administrative calls.
 - So we cannot use 1-2 quorum for the owner, because the owner can update the policy itself. We need to use signers instead, who does not have admin privilege.
 
-## Appendix: example withdraw payload
+## Appendix: Payload Examples
+### withdraw payload
+`HyperliquidTransaction:Withdraw` data type
 ```
 {
     "domain": {
@@ -93,5 +95,56 @@ After the vault is created, the operator should be able to trade or withdraw to 
             }
         ]
     }
+}
+```
+
+### L1 action payload
+`Agent` data type
+```
+{
+  "typed_data": {
+    "domain": {
+      "name": "Exchange",
+      "version": "1",
+      "chainId": 1337,
+      "verifyingContract": "0x0000000000000000000000000000000000000000"
+    },
+    "types": {
+      "EIP712Domain": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "version",
+          "type": "string"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "verifyingContract",
+          "type": "address"
+        }
+      ],
+      "Agent": [
+        {
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "name": "connectionId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    "message": {
+      "source": "a",
+      "connectionId": "0x1b5226e2d328a893808e7cfde4a4c651a5a86d20b9f45eaa8a5ff3c561dc3806"
+    },
+    "primary_type": "Agent"
+  }
+}
 }
 ```
